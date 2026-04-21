@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Scheduler</title>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --s1:       #161b22;
+      --s2:       #1c2128;
+      --s3:       #252c35;
+      --border:   #30363d;
+      --accent:   #7c6af7;
+      --acg:      rgba(124,106,247,0.12);
+      --green:    #3fb950;
+      --gng:      rgba(63,185,80,0.12);
+      --red:      #f85149;
+      --rdg:      rgba(248,81,73,0.12);
+      --yellow:   #d29922;
+      --text:     #c9d1d9;
+      --muted:    #8b949e;
+      --bright:   #f0f6fc;
+      --r:        8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    .header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 24px;
+      background: var(--s1);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0; z-index: 10;
+    }
+    .header-logo {
+      width: 30px; height: 30px; background: var(--accent);
+      border-radius: 7px; display: flex; align-items: center;
+      justify-content: center; font-size: 15px; flex-shrink: 0;
+    }
+    .header h1 { font-size: 1rem; font-weight: 700; color: var(--bright); }
+    .header-tag {
+      margin-left: 8px; font-size: 0.65rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 99px;
+      background: var(--acg); color: var(--accent);
+      border: 1px solid rgba(124,106,247,.3);
+    }
+    .header-right { margin-left: auto; font-size: 0.72rem; color: var(--muted); }
+
+    .body { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    .top-row {
+      display: grid;
+      grid-template-columns: 290px 290px 1fr;
+      border-bottom: 1px solid var(--border);
+      min-height: 0;
+      flex-shrink: 0;
+      max-height: 52vh;
+    }
+
+    .panel {
+      padding: 18px; overflow-y: auto;
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .panel:last-child { border-right: none; }
+
+    .graph-row {
+      flex: 1; overflow: auto;
+      padding: 18px 20px;
+      background: var(--bg);
+    }
+
+    /* ── Panel parts ─────────────────────────────────────── */
+    .section-label {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 0.68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em;
+      color: var(--muted);
+    }
+    .count-badge {
+      font-size: 0.62rem; padding: 1px 6px;
+      border-radius: 99px; background: var(--s3);
+      color: var(--muted); font-weight: 600;
+    }
+
+    .divider { border: none; border-top: 1px solid var(--border); }
+
+    /* ── Task list ────────────────────────────────────────── */
+    .item-list { display: flex; flex-direction: column; gap: 5px; }
+
+    .task-item, .edge-item {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 9px; border-radius: 6px;
+      background: var(--s3); border: 1px solid var(--border);
+      transition: border-color .15s;
+      font-size: .82rem;
+    }
+    .task-item:hover, .edge-item:hover { border-color: var(--accent); }
+
+    .t-num {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: .68rem; color: var(--accent); min-width: 18px;
+    }
+    .t-name { flex: 1; color: var(--bright); }
+    .t-minimal {
+      font-size: .62rem; padding: 2px 6px; border-radius: 4px;
+      background: var(--gng); color: var(--green);
+      border: 1px solid rgba(63,185,80,.25); flex-shrink: 0;
+    }
+
+    .del-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); padding: 2px 5px; border-radius: 4px;
+      font-size: 12px; line-height: 1;
+      transition: color .15s, background .15s; flex-shrink: 0;
+    }
+    .del-btn:hover { color: var(--red); background: var(--rdg); }
+
+    /* ── Edge item ───────────────────────────────────────── */
+    .e-from { color: var(--accent); font-weight: 600; }
+    .e-arr  { color: var(--muted); }
+    .e-to   { flex: 1; color: var(--bright); font-weight: 500; }
+
+    /* ── Forms ───────────────────────────────────────────── */
+    .form-card {
+      background: var(--s2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    input, select {
+      width: 100%; padding: 7px 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text);
+      font-size: .82rem; font-family: inherit;
+      outline: none; transition: border-color .15s;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--muted); }
+    select option { background: var(--s2); }
+
+    .btn {
+      padding: 7px 13px; border: none; border-radius: 6px;
+      font-size: .82rem; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: .88; }
+    .btn-sm { padding: 5px 10px; font-size: .75rem; }
+
+    /* ── Info panel (right) ───────────────────────────────── */
+    .info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      align-content: start;
+    }
+    .info-card {
+      background: var(--s2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 13px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .info-card.full { grid-column: 1 / -1; }
+    .info-title {
+      font-size: .67rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--muted);
+    }
+
+    .order-list { display: flex; flex-direction: column; gap: 4px; }
+    .order-item {
+      display: flex; align-items: center; gap: 7px;
+      font-size: .81rem;
+    }
+    .o-num {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: .68rem; color: var(--accent);
+      background: var(--acg); border: 1px solid rgba(124,106,247,.25);
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .o-name { color: var(--bright); flex: 1; }
+    .o-down { color: var(--muted); font-size: .7rem; margin-left: auto; }
+
+    .min-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+    .min-chip {
+      padding: 3px 9px; border-radius: 99px;
+      background: var(--gng); color: var(--green);
+      border: 1px solid rgba(63,185,80,.25);
+      font-size: .73rem; font-weight: 600;
+    }
+
+    .cycle-banner {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px; border-radius: 6px;
+      background: var(--rdg); border: 1px solid rgba(248,81,73,.3);
+      color: var(--red); font-size: .8rem; font-weight: 500;
+    }
+
+    .empty { color: var(--muted); font-size: .78rem; font-style: italic; padding: 4px 0; }
+
+    /* ── Graph row ───────────────────────────────────────── */
+    .graph-label {
+      font-size: .67rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--muted); margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    #graph-svg { display: block; }
+
+    /* ── Toast ───────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      padding: 9px 15px; background: var(--s2);
+      border: 1px solid var(--border); border-radius: 8px;
+      font-size: .8rem; color: var(--bright); z-index: 9999;
+      opacity: 0; transform: translateY(8px) scale(.97);
+      transition: opacity .2s, transform .2s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: none; }
+    .toast.ok  { border-color: rgba(63,185,80,.4); }
+    .toast.err { border-color: rgba(248,81,73,.4); }
+
+    /* ── Scrollbars ──────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-logo">⚡</div>
+    <h1>Task Scheduler</h1>
+    <span class="header-tag">Kahn's Algorithm</span>
+    <span class="header-right" id="status-text"></span>
+  </header>
+
+  <div class="body">
+    <div class="top-row">
+
+      <!-- Panel 1 — Tasks -->
+      <div class="panel">
+        <div class="section-label">
+          Tasks
+          <span class="count-badge" id="task-count">0</span>
+        </div>
+
+        <div class="item-list" id="task-list"></div>
+
+        <hr class="divider">
+        <div class="section-label">Add Task</div>
+        <div class="form-card">
+          <input type="text" id="new-task" placeholder="Task name…" maxlength="40">
+          <button class="btn btn-primary" onclick="uiAddTask()">+ Add Task</button>
+        </div>
+      </div>
+
+      <!-- Panel 2 — Dependencies -->
+      <div class="panel">
+        <div class="section-label">
+          Dependencies
+          <span class="count-badge" id="edge-count">0</span>
+        </div>
+
+        <div class="item-list" id="edge-list"></div>
+
+        <hr class="divider">
+        <div class="section-label">Add Dependency</div>
+        <div class="form-card">
+          <select id="dep-from"><option value="">From (prerequisite)…</option></select>
+          <select id="dep-to"><option value="">To (depends on above)…</option></select>
+          <button class="btn btn-primary" onclick="uiAddEdge()">+ Add Dependency</button>
+        </div>
+      </div>
+
+      <!-- Panel 3 — Results -->
+      <div class="panel" style="border-right:none">
+        <div class="section-label">Analysis</div>
+        <div class="info-grid" id="info-grid"></div>
+      </div>
+
+    </div><!-- /top-row -->
+
+    <!-- Graph -->
+    <div class="graph-row">
+      <div class="graph-label">
+        Dependency Graph
+        <span id="graph-badge" style="font-size:.68rem;padding:2px 8px;border-radius:99px;background:var(--acg);color:var(--accent);border:1px solid rgba(124,106,247,.25);font-weight:600;"></span>
+      </div>
+      <svg id="graph-svg"></svg>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+
+const S = {
+  tasks: new Map(), // id -> name
+  edges: new Set(), // "fromId|toId"
+  seq: 1,
+};
+
+// ═══════════════════════════════════════════════════════
+//  CORE OPERATIONS
+// ═══════════════════════════════════════════════════════
+
+function taskAdd(name) {
+  const id = 't' + (S.seq++);
+  S.tasks.set(id, name.trim());
+  return id;
+}
+
+function taskDel(id) {
+  S.tasks.delete(id);
+  for (const e of [...S.edges]) {
+    const [a, b] = e.split('|');
+    if (a === id || b === id) S.edges.delete(e);
+  }
+}
+
+function edgeAdd(a, b) {
+  if (a === b) return false;
+  const k = a + '|' + b;
+  if (S.edges.has(k)) return false;
+  S.edges.add(k);
+  return true;
+}
+
+function edgeDel(k) { S.edges.delete(k); }
+
+// ═══════════════════════════════════════════════════════
+//  KAHN'S ALGORITHM
+// ═══════════════════════════════════════════════════════
+
+function kahn() {
+  const adj   = new Map(); // id -> [successors]
+  const inDeg = new Map(); // id -> in-degree
+
+  for (const [id] of S.tasks) {
+    adj.set(id, []);
+    inDeg.set(id, 0);
+  }
+  for (const e of S.edges) {
+    const [a, b] = e.split('|');
+    if (!S.tasks.has(a) || !S.tasks.has(b)) continue;
+    adj.get(a).push(b);
+    inDeg.set(b, inDeg.get(b) + 1);
+  }
+
+  // Minimal elements = sources (in-degree 0)
+  const minimal = [];
+  for (const [id, d] of inDeg) if (d === 0) minimal.push(id);
+
+  // Process queue
+  const queue   = [...minimal];
+  const tmpDeg  = new Map(inDeg);
+  const order   = [];
+
+  while (queue.length) {
+    const n = queue.shift();
+    order.push(n);
+    for (const nb of adj.get(n)) {
+      const d = tmpDeg.get(nb) - 1;
+      tmpDeg.set(nb, d);
+      if (d === 0) queue.push(nb);
+    }
+  }
+
+  // Nodes in cycles (not processed)
+  const cycleNodes = [...S.tasks.keys()].filter(id => !order.includes(id));
+
+  return {
+    order,
+    minimal,
+    hasCycle: order.length !== S.tasks.size,
+    cycleNodes,
+    adj,
+    inDeg,
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+//  GRAPH LAYOUT  (layered / longest-path levels)
+// ═══════════════════════════════════════════════════════
+
+function layoutGraph(adj) {
+  // Compute longest-path level per node (BFS on DAG)
+  // For cycled graphs, cycle nodes fall back to level 0
+  const level = new Map();
+  const inDeg = new Map();
+
+  for (const [id] of S.tasks) { level.set(id, 0); inDeg.set(id, 0); }
+
+  for (const e of S.edges) {
+    const [a, b] = e.split('|');
+    if (!S.tasks.has(a) || !S.tasks.has(b)) continue;
+    inDeg.set(b, inDeg.get(b) + 1);
+  }
+
+  const tmpDeg = new Map(inDeg);
+  const queue  = [];
+  for (const [id, d] of tmpDeg) if (d === 0) queue.push(id);
+
+  while (queue.length) {
+    const n = queue.shift();
+    for (const nb of (adj.get(n) || [])) {
+      if (!S.tasks.has(nb)) continue;
+      level.set(nb, Math.max(level.get(nb), level.get(n) + 1));
+      const d = tmpDeg.get(nb) - 1;
+      tmpDeg.set(nb, d);
+      if (d === 0) queue.push(nb);
+    }
+  }
+
+  // Group by level
+  const byLevel = new Map();
+  for (const [id, lv] of level) {
+    if (!byLevel.has(lv)) byLevel.set(lv, []);
+    byLevel.get(lv).push(id);
+  }
+
+  // Node dimensions
+  const NW = 164, NH = 46, HG = 72, VG = 22, PAD = 28;
+
+  // Max count per column → uniform vertical space
+  let maxRows = 0;
+  for (const [, ns] of byLevel) maxRows = Math.max(maxRows, ns.length);
+
+  const colH = maxRows * NH + (maxRows - 1) * VG;
+  const pos  = new Map();
+
+  for (const [lv, nodes] of byLevel) {
+    const x    = PAD + lv * (NW + HG);
+    const used = nodes.length * NH + (nodes.length - 1) * VG;
+    const offY = PAD + (colH - used) / 2;
+    nodes.forEach((id, i) => {
+      pos.set(id, { x, y: offY + i * (NH + VG), w: NW, h: NH });
+    });
+  }
+
+  return pos;
+}
+
+// ═══════════════════════════════════════════════════════
+//  SVG RENDER
+// ═══════════════════════════════════════════════════════
+
+function renderGraph() {
+  const svg = document.getElementById('graph-svg');
+  const badge = document.getElementById('graph-badge');
+  const { tasks, edges } = S;
+
+  if (!tasks.size) {
+    svg.setAttribute('viewBox', '0 0 360 80');
+    svg.style.width = '360px'; svg.style.height = '80px';
+    svg.innerHTML = '<text x="180" y="44" text-anchor="middle" fill="#8b949e" font-size="13" font-family="-apple-system,sans-serif">Add tasks to see the graph</text>';
+    badge.textContent = '';
+    return;
+  }
+
+  const res = kahn();
+  const { order, minimal, hasCycle, cycleNodes, adj } = res;
+  const pos = layoutGraph(adj);
+  const orderIdx = new Map(order.map((id, i) => [id, i + 1]));
+
+  badge.textContent = hasCycle
+    ? `${tasks.size} nodes · cycle detected`
+    : `${tasks.size} nodes · ${edges.size} edges`;
+  badge.style.background    = hasCycle ? 'var(--rdg)' : 'var(--acg)';
+  badge.style.color         = hasCycle ? 'var(--red)' : 'var(--accent)';
+  badge.style.borderColor   = hasCycle ? 'rgba(248,81,73,.3)' : 'rgba(124,106,247,.25)';
+
+  // Canvas size
+  let maxX = 0, maxY = 0;
+  for (const [, p] of pos) { maxX = Math.max(maxX, p.x + p.w); maxY = Math.max(maxY, p.y + p.h); }
+  const W = maxX + 28, H = maxY + 28;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.style.width  = W + 'px';
+  svg.style.height = H + 'px';
+
+  let out = `<defs>
+    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0,9 3.5,0 7" fill="#7c6af7" opacity=".85"/>
+    </marker>
+    <marker id="arr-c" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0,9 3.5,0 7" fill="#f85149" opacity=".85"/>
+    </marker>
+  </defs>`;
+
+  // ── Edges ──────────────────────────────────────────
+  for (const e of edges) {
+    const [a, b] = e.split('|');
+    if (!pos.has(a) || !pos.has(b)) continue;
+    const fp = pos.get(a), tp = pos.get(b);
+
+    const isCycle = cycleNodes.includes(a) || cycleNodes.includes(b);
+    const col  = isCycle ? '#f85149' : '#7c6af7';
+    const mark = isCycle ? 'url(#arr-c)' : 'url(#arr)';
+
+    // Same column? draw curved path
+    const sameCol = Math.abs(fp.x - tp.x) < 2;
+
+    let d;
+    if (sameCol) {
+      // Arc around (happens with self/same-level deps)
+      const x1 = fp.x + fp.w / 2, y1 = fp.y + fp.h;
+      const x2 = tp.x + tp.w / 2, y2 = tp.y;
+      const cx = x1 + 80;
+      d = `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`;
+    } else {
+      const x1 = fp.x + fp.w, y1 = fp.y + fp.h / 2;
+      const x2 = tp.x,        y2 = tp.y  + tp.h / 2;
+      const dx = (x2 - x1) * 0.45;
+      d = `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
+    }
+
+    out += `<path d="${d}" stroke="${col}" stroke-width="1.5" fill="none"
+      marker-end="${mark}" opacity=".7"/>`;
+  }
+
+  // ── Nodes ──────────────────────────────────────────
+  for (const [id, p] of pos) {
+    const name  = tasks.get(id);
+    const isMini   = minimal.includes(id);
+    const isCycle  = cycleNodes.includes(id);
+    const num      = orderIdx.get(id);
+    const trunc    = name.length > 17 ? name.slice(0, 15) + '…' : name;
+
+    let fill, stroke, numCol;
+    if (isCycle)       { fill = '#1a0e0d'; stroke = '#f85149'; numCol = '#f85149'; }
+    else if (isMini)   { fill = '#0c1f12'; stroke = '#3fb950'; numCol = '#3fb950'; }
+    else               { fill = '#10121e'; stroke = '#7c6af7'; numCol = '#7c6af7'; }
+
+    out += `<g class="svg-node" style="cursor:default">
+      <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"
+        rx="9" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+
+    if (num) {
+      out += `<text x="${p.x+12}" y="${p.y+14}"
+        font-size="9" font-family="'SF Mono','Fira Code',monospace"
+        fill="${numCol}" font-weight="700">#${num}</text>`;
+    }
+
+    out += `<text x="${p.x + p.w/2}" y="${p.y + (num ? 33 : p.h/2 + 5)}"
+      text-anchor="middle" font-size="12.5"
+      font-family="-apple-system,'Segoe UI',sans-serif"
+      fill="#f0f6fc" font-weight="500">${esc(trunc)}</text>`;
+
+    // Cycle label
+    if (isCycle) {
+      out += `<text x="${p.x + p.w - 8}" y="${p.y + 13}"
+        text-anchor="end" font-size="8.5" fill="#f85149" font-weight="700">CYCLE</text>`;
+    }
+
+    out += `</g>`;
+  }
+
+  svg.innerHTML = out;
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI RENDERS
+// ═══════════════════════════════════════════════════════
+
+function render() {
+  const { tasks, edges } = S;
+  const res = kahn();
+
+  // Counts
+  document.getElementById('task-count').textContent = tasks.size;
+  document.getElementById('edge-count').textContent = edges.size;
+
+  // Status bar
+  const st = document.getElementById('status-text');
+  if (res.hasCycle) {
+    st.style.color = 'var(--red)';
+    st.textContent = `⚠ Cycle detected in ${res.cycleNodes.length} node(s)`;
+  } else if (!tasks.size) {
+    st.style.color = 'var(--muted)';
+    st.textContent = 'No tasks';
+  } else {
+    st.style.color = 'var(--green)';
+    st.textContent = `✓ Valid · ${res.order.length} tasks scheduled`;
+  }
+
+  renderTaskList(res);
+  renderEdgeList();
+  renderInfo(res);
+  renderGraph();
+  refreshSelects();
+}
+
+function renderTaskList(res) {
+  const el = document.getElementById('task-list');
+  const { tasks } = S;
+
+  if (!tasks.size) {
+    el.innerHTML = '<div class="empty">No tasks yet</div>';
+    return;
+  }
+
+  el.innerHTML = [...tasks.entries()].map(([id, name], i) => {
+    const isMini = res.minimal.includes(id);
+    return `<div class="task-item">
+      <span class="t-num">${i+1}</span>
+      <span class="t-name">${esc(name)}</span>
+      ${isMini ? '<span class="t-minimal">start</span>' : ''}
+      <button class="del-btn" onclick="uiDelTask('${id}')" title="Delete task">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderEdgeList() {
+  const el = document.getElementById('edge-list');
+  const { tasks, edges } = S;
+
+  if (!edges.size) {
+    el.innerHTML = '<div class="empty">No dependencies yet</div>';
+    return;
+  }
+
+  el.innerHTML = [...edges].map(e => {
+    const [a, b] = e.split('|');
+    if (!tasks.has(a) || !tasks.has(b)) return '';
+    return `<div class="edge-item">
+      <span class="e-from">${esc(tasks.get(a))}</span>
+      <span class="e-arr">→</span>
+      <span class="e-to">${esc(tasks.get(b))}</span>
+      <button class="del-btn" onclick="uiDelEdge('${e}')" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderInfo(res) {
+  const { order, minimal, hasCycle } = res;
+  const { tasks } = S;
+  let html = '';
+
+  // Execution order card (full width)
+  html += `<div class="info-card full">
+    <div class="info-title">Execution Order</div>`;
+
+  if (hasCycle) {
+    html += `<div class="cycle-banner">⚠ Cycle detected — topological order is undefined for cycled nodes</div>`;
+    if (order.length) {
+      html += `<div class="empty" style="margin-top:4px">Partial order (${order.length} acyclic nodes):</div>`;
+      html += `<div class="order-list">` + order.map((id, i) => `
+        <div class="order-item">
+          <span class="o-num">${i+1}</span>
+          <span class="o-name">${esc(tasks.get(id))}</span>
+          ${i < order.length-1 ? '<span class="o-down">↓</span>' : ''}
+        </div>`).join('') + `</div>`;
+    }
+  } else if (!order.length) {
+    html += `<div class="empty">Add tasks to see the schedule</div>`;
+  } else {
+    html += `<div class="order-list">` + order.map((id, i) => `
+      <div class="order-item">
+        <span class="o-num">${i+1}</span>
+        <span class="o-name">${esc(tasks.get(id))}</span>
+        ${i < order.length-1 ? '<span class="o-down">↓</span>' : ''}
+      </div>`).join('') + `</div>`;
+  }
+  html += `</div>`;
+
+  // Minimal elements card
+  html += `<div class="info-card">
+    <div class="info-title">Starting Tasks</div>`;
+  if (!minimal.length) {
+    html += `<div class="empty">None</div>`;
+  } else {
+    html += `<div class="min-wrap">` +
+      minimal.map(id => `<span class="min-chip">${esc(tasks.get(id))}</span>`).join('') +
+      `</div>`;
+  }
+  html += `</div>`;
+
+  // Stats card
+  html += `<div class="info-card">
+    <div class="info-title">Stats</div>
+    <div style="display:flex;flex-direction:column;gap:5px;font-size:.78rem">
+      <div style="display:flex;justify-content:space-between">
+        <span style="color:var(--muted)">Tasks</span>
+        <span style="color:var(--bright);font-weight:600">${tasks.size}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span style="color:var(--muted)">Dependencies</span>
+        <span style="color:var(--bright);font-weight:600">${S.edges.size}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span style="color:var(--muted)">Start nodes</span>
+        <span style="color:var(--green);font-weight:600">${minimal.length}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span style="color:var(--muted)">Cycle</span>
+        <span style="color:${hasCycle ? 'var(--red)' : 'var(--green)'};font-weight:600">${hasCycle ? 'Yes' : 'No'}</span>
+      </div>
+    </div>
+  </div>`;
+
+  document.getElementById('info-grid').innerHTML = html;
+}
+
+function refreshSelects() {
+  const fs = document.getElementById('dep-from');
+  const ts = document.getElementById('dep-to');
+  const fv = fs.value, tv = ts.value;
+
+  const opts = [...S.tasks.entries()].map(([id, n]) =>
+    `<option value="${id}" ${id===fv?'selected':''}>${esc(n)}</option>`
+  ).join('');
+
+  const opts2 = [...S.tasks.entries()].map(([id, n]) =>
+    `<option value="${id}" ${id===tv?'selected':''}>${esc(n)}</option>`
+  ).join('');
+
+  fs.innerHTML = `<option value="">From (prerequisite)…</option>${opts}`;
+  ts.innerHTML = `<option value="">To (depends on above)…</option>${opts2}`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI HANDLERS
+// ═══════════════════════════════════════════════════════
+
+function uiAddTask() {
+  const inp = document.getElementById('new-task');
+  const name = inp.value.trim();
+  if (!name) { toast('Enter a task name', 'err'); return; }
+
+  for (const [, n] of S.tasks) {
+    if (n.toLowerCase() === name.toLowerCase()) {
+      toast('Task already exists', 'err'); return;
+    }
+  }
+
+  taskAdd(name);
+  inp.value = '';
+  render();
+  toast(`Added "${name}"`, 'ok');
+}
+
+function uiDelTask(id) {
+  const name = S.tasks.get(id);
+  taskDel(id);
+  render();
+  toast(`Deleted "${name}"`, 'ok');
+}
+
+function uiAddEdge() {
+  const a = document.getElementById('dep-from').value;
+  const b = document.getElementById('dep-to').value;
+  if (!a || !b) { toast('Select both tasks', 'err'); return; }
+  if (a === b)  { toast('A task cannot depend on itself', 'err'); return; }
+
+  if (!edgeAdd(a, b)) { toast('Dependency already exists', 'err'); return; }
+
+  const res = kahn();
+  if (res.hasCycle) {
+    toast('⚠ Cycle detected!', 'err');
+  } else {
+    toast(`${S.tasks.get(a)} → ${S.tasks.get(b)}`, 'ok');
+  }
+  render();
+}
+
+function uiDelEdge(k) {
+  edgeDel(k);
+  render();
+  toast('Dependency removed', 'ok');
+}
+
+// ═══════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'toast'; }, 2600);
+}
+
+// Keyboard shortcut
+document.getElementById('new-task').addEventListener('keydown', e => {
+  if (e.key === 'Enter') uiAddTask();
+});
+
+// ═══════════════════════════════════════════════════════
+//  INIT  —  default tasks
+// ═══════════════════════════════════════════════════════
+
+(function init() {
+  const ids = {};
+  ['Install OS', 'Install Python', 'Write Code', 'Run Program', 'Test App']
+    .forEach(n => { ids[n] = taskAdd(n); });
+
+  edgeAdd(ids['Install OS'],     ids['Install Python']);
+  edgeAdd(ids['Install Python'], ids['Write Code']);
+  edgeAdd(ids['Write Code'],     ids['Run Program']);
+  edgeAdd(ids['Run Program'],    ids['Test App']);
+
+  render();
+})();
+</script>
+</body>
+</html>
